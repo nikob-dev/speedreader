@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup">
+    <p class="eyebrow">Speed Reader</p>
+    <button id="readPage" class="btn btn-primary">Speed Read This Page</button>
+    <button id="readSelection" class="btn btn-secondary">Speed Read Selection</button>
+
+    <div class="wpm-row">
+      <label for="wpm">Speed</label>
+      <input type="range" id="wpm" min="150" max="900" step="25">
+      <span id="wpmVal" class="wpm-val"></span>
+    </div>
+
+    <p id="status" class="status"></p>
+    <p class="hint">Tip: select text on any page and double-tap Shift to start instantly. Or right-click a selection → Speed Read Selection.</p>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,77 @@
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  width: 280px;
+  background: #14151c;
+  color: #ece9e2;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+}
+
+.popup {
+  padding: 16px;
+}
+
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #7d8095;
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+
+.btn {
+  display: block;
+  width: 100%;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  border-radius: 8px;
+  border: none;
+  padding: 10px 14px;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+.btn-primary { background: #ece9e2; color: #14151c; }
+.btn-secondary { background: transparent; color: #ece9e2; border: 1px solid #2a2d3b; }
+.btn:hover { opacity: 0.85; }
+
+.wpm-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.wpm-row label {
+  font-size: 12px;
+  color: #7d8095;
+}
+
+.wpm-row input[type="range"] {
+  flex: 1;
+  accent-color: #ff5d3a;
+}
+
+.wpm-val {
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 32px;
+  text-align: right;
+}
+
+.status {
+  font-size: 12px;
+  color: #ff5d3a;
+  min-height: 14px;
+  margin: 10px 0 0;
+}
+
+.hint {
+  font-size: 11px;
+  color: #565968;
+  line-height: 1.5;
+  margin: 10px 0 0;
+}
