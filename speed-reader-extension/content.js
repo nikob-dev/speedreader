@@ -369,6 +369,8 @@
   document.addEventListener(
     'keydown',
     (e) => {
+      // A copy orphaned by an extension reload must defer to the freshly injected one.
+      if (!chrome.runtime?.id) return;
       if (e.key === 'Shift') {
         if (e.repeat) return;
         const now = Date.now();

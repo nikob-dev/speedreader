@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Speed Reader — RSVP",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Speed read any page or selected text. Select text and double-tap Shift to start instantly, one word at a time with a fixed focal point.",
   "icons": {
     "16": "icons/icon16.png",
