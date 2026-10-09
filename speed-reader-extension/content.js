@@ -178,6 +178,7 @@
     if (word.length > 7) base *= 1.15;
     if (/[,;:]$/.test(word)) base *= 1.4;
     if (/[.!?]$/.test(word)) base *= 1.9;
+    if (/(?:[–—]|--)$/.test(word) || word === '-') base *= 1.7;
     return base;
   }
 
@@ -336,7 +337,9 @@
     chrome.storage.sync.get({ wpm: 350 }, (data) => {
       wpm = data.wpm || 350;
       const text = getSourceText(mode);
-      words = text.trim().split(/\s+/).filter(Boolean);
+      words = text.trim().split(/\s+/)
+        .flatMap((w) => w.split(/(?<=[–—]|--)(?=\S)/))
+        .filter(Boolean);
 
       if (!shadowHost) buildOverlay();
       els.wpmSlider.value = wpm;
