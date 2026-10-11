@@ -63,8 +63,22 @@
     .sr-word .pivot { color: #ff5d3a; text-align: center; padding: 0 1px; }
     .sr-word .after { text-align: left; min-width: 150px; color: #ece9e2; }
     .sr-placeholder { font-family: inherit; font-size: 15px; color: #7d8095; }
-    .sr-progress-track { height: 3px; background: #2a2d3b; }
+    .sr-progress-hit {
+      height: 14px;
+      margin: -6px 0 -5px;
+      position: relative;
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      touch-action: none;
+      outline: none;
+    }
+    .sr-progress-track { width: 100%; height: 3px; background: #2a2d3b; transition: height 0.1s ease; }
+    .sr-progress-hit:hover .sr-progress-track,
+    .sr-progress-hit:focus-visible .sr-progress-track,
+    .sr-progress-hit.dragging .sr-progress-track { height: 6px; }
     .sr-progress-fill { height: 100%; width: 0%; background: #4fd1a5; transition: width 0.08s linear; }
+    .sr-progress-hit.dragging .sr-progress-fill { transition: none; }
     .sr-controls { padding: 18px 22px 20px; }
     .sr-row { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
     .sr-row:last-child { margin-bottom: 0; }
@@ -171,6 +185,18 @@
     els.timeLeft.textContent = m + ':' + String(s).padStart(2, '0');
     const pct = words.length ? (index / words.length) * 100 : 0;
     els.progressFill.style.width = pct + '%';
+    els.progressHit.setAttribute('aria-valuemax', words.length);
+    els.progressHit.setAttribute('aria-valuenow', index);
+    els.progressHit.setAttribute('aria-valuetext', `word ${Math.min(index + 1, words.length)} of ${words.length}`);
+  }
+
+  // Leaves index on the previewed word so tick() shows it again on resume.
+  function seekTo(ratio) {
+    if (!words.length) return;
+    const clamped = Math.min(Math.max(ratio, 0), 1);
+    index = Math.min(Math.floor(clamped * words.length), words.length - 1);
+    renderWord(words[index]);
+    updateStats();
   }
 
   function msPerWord(word) {
@@ -266,7 +292,9 @@
           <div class="sr-guide bottom"></div>
           <div class="sr-word"><span class="sr-placeholder">Loading…</span></div>
         </div>
-        <div class="sr-progress-track"><div class="sr-progress-fill"></div></div>
+        <div class="sr-progress-hit" role="slider" tabindex="0" aria-label="Reading position" aria-valuemin="0">
+          <div class="sr-progress-track"><div class="sr-progress-fill"></div></div>
+        </div>
         <div class="sr-controls">
           <div class="sr-row">
             <button class="sr-btn sr-btn-primary" id="srPlay">Start</button>
@@ -286,6 +314,8 @@
 
     els = {
       word: shadowRoot.querySelector('.sr-word'),
+      progressHit: shadowRoot.querySelector('.sr-progress-hit'),
+      progressTrack: shadowRoot.querySelector('.sr-progress-track'),
       progressFill: shadowRoot.querySelector('.sr-progress-fill'),
       play: shadowRoot.getElementById('srPlay'),
       restart: shadowRoot.getElementById('srRestart'),
@@ -302,6 +332,7 @@
     backdrop.addEventListener('click', (e) => {
       if (e.target === backdrop) closeOverlay();
     });
+    wireProgressSeek();
     els.wpmSlider.addEventListener('input', () => {
       wpm = parseInt(els.wpmSlider.value, 10);
       els.wpmValue.textContent = wpm;
@@ -331,6 +362,49 @@
     };
     document.addEventListener('keydown', keyHandler, true);
     document.body.style.overflow = 'hidden';
+  }
+
+  function wireProgressSeek() {
+    const hit = els.progressHit;
+    let wasPlaying = false;
+
+    const ratioFromEvent = (e) => {
+      const rect = els.progressTrack.getBoundingClientRect();
+      return (e.clientX - rect.left) / rect.width;
+    };
+
+    hit.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      e.stopPropagation();
+      wasPlaying = playing;
+      pause();
+      hit.setPointerCapture(e.pointerId);
+      hit.classList.add('dragging');
+      seekTo(ratioFromEvent(e));
+    });
+    hit.addEventListener('pointermove', (e) => {
+      if (!hit.hasPointerCapture(e.pointerId)) return;
+      seekTo(ratioFromEvent(e));
+    });
+    const endDrag = (e) => {
+      if (!hit.hasPointerCapture(e.pointerId)) return;
+      e.stopPropagation();
+      hit.releasePointerCapture(e.pointerId);
+      hit.classList.remove('dragging');
+      if (wasPlaying) play();
+    };
+    hit.addEventListener('pointerup', endDrag);
+    hit.addEventListener('pointercancel', endDrag);
+    hit.addEventListener('click', (e) => e.stopPropagation());
+    hit.addEventListener('keydown', (e) => {
+      if (e.code === 'Home') {
+        e.preventDefault();
+        seekTo(0);
+      } else if (e.code === 'End') {
+        e.preventDefault();
+        seekTo(1);
+      }
+    });
   }
 
   function startReading(mode, autoplay) {
