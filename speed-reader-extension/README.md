@@ -14,6 +14,8 @@
 - Or select text, right-click → **Speed Read Selection**.
 - Or click the toolbar icon → **Speed Read This Page** to read the page's main content.
 - Inside the reader: Space to play/pause, ← → to adjust speed, Esc to close.
+- Resize the reader with the **Size** buttons (S / M / L / Full), press **F** to toggle full-window mode, or drag the bottom-right corner for a custom size (double-click it to reset). Your size is remembered.
+- Click or drag the green progress line to jump to any point in the text.
 
 ## About the permissions
 
