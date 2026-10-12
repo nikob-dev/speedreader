@@ -81,6 +81,18 @@
     .sr-word .pivot { color: #ff5d3a; text-align: center; padding: 0 1px; }
     .sr-word .after { text-align: left; min-width: calc(var(--sr-word-size) * 3.6); color: #ece9e2; }
     .sr-placeholder { font-family: inherit; font-size: 15px; color: #7d8095; }
+    .sr-skip-badge {
+      position: absolute;
+      top: 14px;
+      left: 18px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #7d8095;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+      pointer-events: none;
+    }
+    .sr-skip-badge.visible { opacity: 1; transition: none; }
     .sr-progress-hit {
       height: 14px;
       margin: -6px 0 -5px;
@@ -115,6 +127,7 @@
     .sr-stats { font-size: 12px; color: #7d8095; }
     .sr-row label { font-size: 12px; color: #7d8095; white-space: nowrap; }
     .sr-row input[type="range"] { flex: 1; accent-color: #ff5d3a; }
+    .sr-step { padding: 4px 0; width: 30px; font-size: 16px; line-height: 1; }
     .sr-wpm-value { font-size: 13px; color: #ece9e2; font-weight: 600; min-width: 60px; text-align: right; }
     .sr-sizes { display: flex; border: 1px solid #2a2d3b; border-radius: 8px; overflow: hidden; }
     .sr-sizes button {
@@ -150,6 +163,8 @@
   let els = {};
   let words = [];
   let index = 0;
+  // tick() advances index past the displayed word, so track the displayed one separately.
+  let shownIndex = 0;
   let playing = false;
   let timer = null;
   let wpm = 350;
@@ -160,6 +175,14 @@
   const SIZE_PRESETS = ['s', 'm', 'l', 'full'];
   const MIN_CARD_W = 420;
   const MIN_READER_H = 140;
+  const MIN_WPM = 150;
+  const MAX_WPM = 900;
+  const WPM_STEP = 10;
+  const SKIP_MS = 2000;
+  const SKIP_HOLD_MS = 400;
+  const SKIP_BADGE_MS = 700;
+  let skipBurstWords = 0;
+  let skipBadgeTimer = null;
 
   function extractPageText() {
     const primary = ['article', 'main', '[role="main"]'];
@@ -245,8 +268,59 @@
     if (!words.length) return;
     const clamped = Math.min(Math.max(ratio, 0), 1);
     index = Math.min(Math.floor(clamped * words.length), words.length - 1);
+    shownIndex = index;
     renderWord(words[index]);
     updateStats();
+  }
+
+  function skipTarget(direction) {
+    let i = shownIndex;
+    let elapsed = 0;
+    while (elapsed < SKIP_MS) {
+      const next = i + direction;
+      if (next < 0 || next >= words.length) break;
+      elapsed += msPerWord(words[direction < 0 ? next : i]);
+      i = next;
+    }
+    return i;
+  }
+
+  // While playing, holds the target word briefly before continuing; repeated
+  // presses reschedule the hold, so they stack. While paused it only previews.
+  function skipByTime(direction) {
+    if (!words.length || els.play.disabled) return;
+    const target = skipTarget(direction);
+    showSkipBadge(target - shownIndex);
+    index = target;
+    shownIndex = target;
+    renderWord(words[target]);
+    updateStats();
+    if (playing) {
+      clearTimeout(timer);
+      index = target + 1;
+      timer = setTimeout(tick, SKIP_HOLD_MS + msPerWord(words[target]));
+    }
+  }
+
+  function showSkipBadge(delta) {
+    skipBurstWords += delta;
+    const sign = skipBurstWords < 0 ? '−' : '+';
+    const n = Math.abs(skipBurstWords);
+    els.skipBadge.textContent = `${sign}${n} word${n === 1 ? '' : 's'}`;
+    els.skipBadge.classList.add('visible');
+    clearTimeout(skipBadgeTimer);
+    skipBadgeTimer = setTimeout(() => {
+      els.skipBadge.classList.remove('visible');
+      skipBurstWords = 0;
+    }, SKIP_BADGE_MS);
+  }
+
+  function setWpm(value) {
+    wpm = Math.min(MAX_WPM, Math.max(MIN_WPM, Math.round(value)));
+    els.wpmSlider.value = wpm;
+    els.wpmValue.textContent = wpm;
+    updateStats();
+    chrome.storage.sync.set({ wpm });
   }
 
   function msPerWord(word) {
@@ -263,6 +337,7 @@
       pause();
       return;
     }
+    shownIndex = index;
     renderWord(words[index]);
     updateStats();
     const delay = msPerWord(words[index]);
@@ -304,6 +379,7 @@
   function restart() {
     pause();
     index = 0;
+    shownIndex = 0;
     renderWord(null);
     updateStats();
   }
@@ -341,6 +417,7 @@
           <div class="sr-guide top"></div>
           <div class="sr-guide bottom"></div>
           <div class="sr-word"><span class="sr-placeholder">Loading…</span></div>
+          <div class="sr-skip-badge" aria-live="polite"></div>
         </div>
         <div class="sr-progress-hit" role="slider" tabindex="0" aria-label="Reading position" aria-valuemin="0">
           <div class="sr-progress-track"><div class="sr-progress-fill"></div></div>
@@ -353,7 +430,9 @@
           </div>
           <div class="sr-row">
             <label for="srWpm">Speed</label>
-            <input type="range" id="srWpm" min="150" max="900" step="25" value="350">
+            <button class="sr-btn sr-btn-secondary sr-step" id="srSlower" aria-label="Slower">−</button>
+            <input type="range" id="srWpm" min="150" max="900" step="5" value="350">
+            <button class="sr-btn sr-btn-secondary sr-step" id="srFaster" aria-label="Faster">+</button>
             <span class="sr-wpm-value"><span id="srWpmValue">350</span> wpm</span>
           </div>
           <div class="sr-row">
@@ -366,7 +445,7 @@
             </div>
           </div>
         </div>
-        <p class="sr-hint">Space play/pause · ← → speed · F full · Esc close</p>
+        <p class="sr-hint">Space play/pause · ← → skip · − + speed · F full · Esc close</p>
         <div class="sr-resize" title="Drag to resize · double-click to reset"></div>
       </div>
     `;
@@ -388,6 +467,9 @@
       timeLeft: shadowRoot.getElementById('srTimeLeft'),
       wpmSlider: shadowRoot.getElementById('srWpm'),
       wpmValue: shadowRoot.getElementById('srWpmValue'),
+      slower: shadowRoot.getElementById('srSlower'),
+      faster: shadowRoot.getElementById('srFaster'),
+      skipBadge: shadowRoot.querySelector('.sr-skip-badge'),
       close: shadowRoot.querySelector('.sr-close')
     };
 
@@ -402,29 +484,24 @@
     els.sizeButtons.forEach((btn) => {
       btn.addEventListener('click', () => setSize(btn.dataset.size));
     });
-    els.wpmSlider.addEventListener('input', () => {
-      wpm = parseInt(els.wpmSlider.value, 10);
-      els.wpmValue.textContent = wpm;
-      updateStats();
-      chrome.storage.sync.set({ wpm });
-    });
+    els.wpmSlider.addEventListener('input', () => setWpm(parseInt(els.wpmSlider.value, 10)));
+    els.slower.addEventListener('click', () => setWpm(wpm - WPM_STEP));
+    els.faster.addEventListener('click', () => setWpm(wpm + WPM_STEP));
 
     keyHandler = function (e) {
+      const modified = e.metaKey || e.ctrlKey || e.altKey;
       if (e.code === 'Space') {
         e.preventDefault();
         playing ? pause() : play();
-      } else if (e.code === 'ArrowRight') {
-        wpm = Math.min(900, wpm + 25);
-        els.wpmSlider.value = wpm;
-        els.wpmValue.textContent = wpm;
-        updateStats();
-        chrome.storage.sync.set({ wpm });
-      } else if (e.code === 'ArrowLeft') {
-        wpm = Math.max(150, wpm - 25);
-        els.wpmSlider.value = wpm;
-        els.wpmValue.textContent = wpm;
-        updateStats();
-        chrome.storage.sync.set({ wpm });
+      } else if ((e.code === 'ArrowLeft' || e.code === 'ArrowRight') && !modified) {
+        e.preventDefault();
+        skipByTime(e.code === 'ArrowLeft' ? -1 : 1);
+      } else if ((e.code === 'Minus' || e.code === 'NumpadSubtract') && !modified) {
+        e.preventDefault();
+        setWpm(wpm - WPM_STEP);
+      } else if ((e.code === 'Equal' || e.code === 'NumpadAdd') && !modified) {
+        e.preventDefault();
+        setWpm(wpm + WPM_STEP);
       } else if (e.code === 'KeyF' && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         setSize(readerSize === 'full' ? lastWindowedSize : 'full');
@@ -566,6 +643,7 @@
       els.wpmSlider.value = wpm;
       els.wpmValue.textContent = wpm;
       index = 0;
+      shownIndex = 0;
       playing = false;
       els.play.textContent = 'Start';
       renderWord(null);
