@@ -1,0 +1,12 @@
+{
+  "name": "speedreader",
+  "private": true,
+  "description": "Dev tooling for the Speed Reader Chrome extension",
+  "scripts": {
+    "dev": "web-ext run --target chromium --source-dir speed-reader-extension --start-url https://en.wikipedia.org/wiki/Speed_reading",
+    "zip": "web-ext build --source-dir speed-reader-extension --artifacts-dir dist --overwrite-dest --filename speed-reader-{version}.zip"
+  },
+  "devDependencies": {
+    "web-ext": "10.7.0"
+  }
+}
