@@ -14,14 +14,32 @@
       justify-content: center;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
     }
+    .sr-backdrop[data-size="full"] { background: #0b0c11; }
     .sr-card {
-      width: min(680px, 92vw);
+      --sr-card-w: 680px;
+      --sr-reader-h: 220px;
+      --sr-word-size: 42px;
+      width: min(var(--sr-card-w), calc(100vw - 32px));
       background: #1b1d27;
       border: 1px solid #2a2d3b;
       border-radius: 16px;
       position: relative;
       box-shadow: 0 20px 60px rgba(0,0,0,0.5);
     }
+    .sr-backdrop[data-size="s"] .sr-card { --sr-card-w: 560px; --sr-reader-h: 180px; --sr-word-size: 34px; }
+    .sr-backdrop[data-size="l"] .sr-card { --sr-card-w: min(1000px, 94vw); --sr-reader-h: 340px; --sr-word-size: 64px; }
+    .sr-backdrop[data-size="full"] .sr-card {
+      --sr-word-size: clamp(56px, 7vw, 120px);
+      width: 100vw;
+      height: 100vh;
+      border: none;
+      border-radius: 0;
+      box-shadow: none;
+      display: flex;
+      flex-direction: column;
+    }
+    .sr-backdrop[data-size="full"] .sr-reader { flex: 1; height: auto; }
+    .sr-backdrop[data-size="full"] .sr-resize { display: none; }
     .sr-close {
       position: absolute;
       top: 12px;
@@ -38,7 +56,7 @@
     .sr-close:hover { color: #ece9e2; background: #2a2d3b; }
     .sr-reader {
       position: relative;
-      height: 220px;
+      height: var(--sr-reader-h);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -56,12 +74,12 @@
       display: flex;
       align-items: baseline;
       font-family: Georgia, "Times New Roman", serif;
-      font-size: 42px;
+      font-size: var(--sr-word-size);
       line-height: 1;
     }
-    .sr-word .before { text-align: right; min-width: 150px; color: #ece9e2; }
+    .sr-word .before { text-align: right; min-width: calc(var(--sr-word-size) * 3.6); color: #ece9e2; }
     .sr-word .pivot { color: #ff5d3a; text-align: center; padding: 0 1px; }
-    .sr-word .after { text-align: left; min-width: 150px; color: #ece9e2; }
+    .sr-word .after { text-align: left; min-width: calc(var(--sr-word-size) * 3.6); color: #ece9e2; }
     .sr-placeholder { font-family: inherit; font-size: 15px; color: #7d8095; }
     .sr-progress-hit {
       height: 14px;
@@ -98,6 +116,32 @@
     .sr-row label { font-size: 12px; color: #7d8095; white-space: nowrap; }
     .sr-row input[type="range"] { flex: 1; accent-color: #ff5d3a; }
     .sr-wpm-value { font-size: 13px; color: #ece9e2; font-weight: 600; min-width: 60px; text-align: right; }
+    .sr-sizes { display: flex; border: 1px solid #2a2d3b; border-radius: 8px; overflow: hidden; }
+    .sr-sizes button {
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      background: transparent;
+      color: #7d8095;
+      border: none;
+      padding: 6px 12px;
+      cursor: pointer;
+    }
+    .sr-sizes button + button { border-left: 1px solid #2a2d3b; }
+    .sr-sizes button:hover { color: #ece9e2; }
+    .sr-sizes button[aria-pressed="true"] { background: #2a2d3b; color: #ece9e2; }
+    .sr-resize {
+      position: absolute;
+      right: 3px;
+      bottom: 3px;
+      width: 16px;
+      height: 16px;
+      cursor: nwse-resize;
+      touch-action: none;
+      background: linear-gradient(135deg, transparent 55%, #3a3e52 55%, #3a3e52 62%, transparent 62%, transparent 75%, #3a3e52 75%, #3a3e52 82%, transparent 82%);
+      border-bottom-right-radius: 12px;
+    }
+    .sr-resize:hover { filter: brightness(1.6); }
     .sr-hint { font-size: 11px; color: #565968; text-align: center; margin: 0; padding-bottom: 16px; }
   `;
 
@@ -110,6 +154,12 @@
   let timer = null;
   let wpm = 350;
   let keyHandler = null;
+  let readerSize = 'm';
+  let readerCustom = null;
+  let lastWindowedSize = 'm';
+  const SIZE_PRESETS = ['s', 'm', 'l', 'full'];
+  const MIN_CARD_W = 420;
+  const MIN_READER_H = 140;
 
   function extractPageText() {
     const primary = ['article', 'main', '[role="main"]'];
@@ -306,13 +356,28 @@
             <input type="range" id="srWpm" min="150" max="900" step="25" value="350">
             <span class="sr-wpm-value"><span id="srWpmValue">350</span> wpm</span>
           </div>
+          <div class="sr-row">
+            <label>Size</label>
+            <div class="sr-sizes" role="group" aria-label="Reader size">
+              <button data-size="s" aria-pressed="false">S</button>
+              <button data-size="m" aria-pressed="false">M</button>
+              <button data-size="l" aria-pressed="false">L</button>
+              <button data-size="full" aria-pressed="false">Full</button>
+            </div>
+          </div>
         </div>
-        <p class="sr-hint">Space play/pause · ← → speed · Esc close</p>
+        <p class="sr-hint">Space play/pause · ← → speed · F full · Esc close</p>
+        <div class="sr-resize" title="Drag to resize · double-click to reset"></div>
       </div>
     `;
     shadowRoot.appendChild(backdrop);
 
     els = {
+      backdrop,
+      card: shadowRoot.querySelector('.sr-card'),
+      reader: shadowRoot.querySelector('.sr-reader'),
+      sizeButtons: shadowRoot.querySelectorAll('.sr-sizes button'),
+      resize: shadowRoot.querySelector('.sr-resize'),
       word: shadowRoot.querySelector('.sr-word'),
       progressHit: shadowRoot.querySelector('.sr-progress-hit'),
       progressTrack: shadowRoot.querySelector('.sr-progress-track'),
@@ -333,6 +398,10 @@
       if (e.target === backdrop) closeOverlay();
     });
     wireProgressSeek();
+    wireResize();
+    els.sizeButtons.forEach((btn) => {
+      btn.addEventListener('click', () => setSize(btn.dataset.size));
+    });
     els.wpmSlider.addEventListener('input', () => {
       wpm = parseInt(els.wpmSlider.value, 10);
       els.wpmValue.textContent = wpm;
@@ -356,6 +425,9 @@
         els.wpmValue.textContent = wpm;
         updateStats();
         chrome.storage.sync.set({ wpm });
+      } else if (e.code === 'KeyF' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        setSize(readerSize === 'full' ? lastWindowedSize : 'full');
       } else if (e.code === 'Escape') {
         closeOverlay();
       }
@@ -407,8 +479,80 @@
     });
   }
 
+  function applySize(size, custom) {
+    readerSize = size;
+    if (size !== 'full') lastWindowedSize = size;
+    if (custom) readerCustom = custom;
+    els.backdrop.dataset.size = size;
+    const style = els.card.style;
+    if (size === 'custom') {
+      style.setProperty('--sr-card-w', `${readerCustom.width}px`);
+      style.setProperty('--sr-reader-h', `${readerCustom.height}px`);
+      style.setProperty('--sr-word-size', `${wordSizeFor(readerCustom)}px`);
+    } else {
+      style.removeProperty('--sr-card-w');
+      style.removeProperty('--sr-reader-h');
+      style.removeProperty('--sr-word-size');
+    }
+    els.sizeButtons.forEach((btn) => {
+      btn.setAttribute('aria-pressed', String(btn.dataset.size === size));
+    });
+  }
+
+  function setSize(size, custom) {
+    applySize(size, custom);
+    chrome.storage.sync.set({ readerSize, readerCustom });
+  }
+
+  // Height also caps it so the word still fits a short, wide reader.
+  function wordSizeFor({ width, height }) {
+    return Math.round(Math.min(Math.max(Math.min(width * 0.062, height * 0.3), 28), 120));
+  }
+
+  // The card is flex-centered, so both edges move: a 10px drag grows it by 20px.
+  function wireResize() {
+    const handle = els.resize;
+    let start = null;
+
+    handle.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      e.stopPropagation();
+      const cardRect = els.card.getBoundingClientRect();
+      const readerRect = els.reader.getBoundingClientRect();
+      start = {
+        x: e.clientX,
+        y: e.clientY,
+        width: cardRect.width,
+        readerH: readerRect.height,
+        chromeH: cardRect.height - readerRect.height
+      };
+      handle.setPointerCapture(e.pointerId);
+    });
+    handle.addEventListener('pointermove', (e) => {
+      if (!start || !handle.hasPointerCapture(e.pointerId)) return;
+      const maxW = window.innerWidth - 32;
+      const maxH = window.innerHeight - 32 - start.chromeH;
+      const width = Math.min(Math.max(start.width + 2 * (e.clientX - start.x), MIN_CARD_W), maxW);
+      const height = Math.min(Math.max(start.readerH + 2 * (e.clientY - start.y), MIN_READER_H), maxH);
+      applySize('custom', { width: Math.round(width), height: Math.round(height) });
+    });
+    const endDrag = (e) => {
+      if (!start || !handle.hasPointerCapture(e.pointerId)) return;
+      handle.releasePointerCapture(e.pointerId);
+      start = null;
+      if (readerSize === 'custom') setSize('custom', readerCustom);
+    };
+    handle.addEventListener('pointerup', endDrag);
+    handle.addEventListener('pointercancel', endDrag);
+    handle.addEventListener('click', (e) => e.stopPropagation());
+    handle.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      setSize('m');
+    });
+  }
+
   function startReading(mode, autoplay) {
-    chrome.storage.sync.get({ wpm: 350 }, (data) => {
+    chrome.storage.sync.get({ wpm: 350, readerSize: 'm', readerCustom: null }, (data) => {
       wpm = data.wpm || 350;
       const text = getSourceText(mode);
       words = text.trim().split(/\s+/)
@@ -416,6 +560,9 @@
         .filter(Boolean);
 
       if (!shadowHost) buildOverlay();
+      const savedSize = data.readerSize;
+      const validSize = SIZE_PRESETS.includes(savedSize) || (savedSize === 'custom' && data.readerCustom);
+      applySize(validSize ? savedSize : 'm', data.readerCustom);
       els.wpmSlider.value = wpm;
       els.wpmValue.textContent = wpm;
       index = 0;
