@@ -98,6 +98,18 @@
     .sr-row label { font-size: 12px; color: #7d8095; white-space: nowrap; }
     .sr-row input[type="range"] { flex: 1; accent-color: #ff5d3a; }
     .sr-wpm-value { font-size: 13px; color: #ece9e2; font-weight: 600; min-width: 60px; text-align: right; }
+    .sr-attn { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; }
+    .sr-attn[aria-pressed="true"] { border-color: #4a4e66; }
+    .sr-dot { width: 8px; height: 8px; border-radius: 50%; background: #565968; }
+    .sr-attn[data-state="focused"] .sr-dot { background: #4fd1a5; }
+    .sr-attn[data-state="away"] .sr-dot,
+    .sr-attn[data-state="eyes-closed"] .sr-dot,
+    .sr-attn[data-state="no-face"] .sr-dot { background: #f5b84a; }
+    .sr-attn[data-state="starting"] .sr-dot,
+    .sr-attn[data-state="needs-permission"] .sr-dot { background: #7d8095; animation: sr-pulse 1s ease-in-out infinite; }
+    .sr-attn[data-state="error"] .sr-dot { background: #ff5d3a; }
+    @keyframes sr-pulse { 50% { opacity: 0.3; } }
+    .sr-wpm-adjust { color: #7d8095; font-weight: 400; }
     .sr-hint { font-size: 11px; color: #565968; text-align: center; margin: 0; padding-bottom: 16px; }
   `;
 
@@ -110,6 +122,25 @@
   let timer = null;
   let wpm = 350;
   let keyHandler = null;
+
+  // Attention tracking: the camera runs in an offscreen document (see eye/),
+  // this side only reacts to coarse states relayed by the background worker.
+  const ATTENTION_PAUSE_STATES = ['away', 'eyes-closed', 'no-face'];
+  const REWIND_BEFORE_LAPSE_MS = 150;
+  const WPM_ADJUST_MIN = -100;
+  const WPM_ADJUST_MAX = 50;
+  const WPM_ADJUST_STEP = 25;
+  const FOCUS_SPEEDUP_MS = 45000;
+  const FATIGUE_BLINKS_PER_MIN = 25;
+  const FATIGUE_MIN_SAMPLE_MS = 30000;
+  const FATIGUE_COOLDOWN_MS = 60000;
+  let eyeTracking = false;
+  let attentionState = 'off';
+  let pausedByAttention = false;
+  let wpmAdjust = 0;
+  let focusedPlayMs = 0;
+  let lastFatigueSlowdown = 0;
+  let shownLog = [];
 
   function extractPageText() {
     const primary = ['article', 'main', '[role="main"]'];
@@ -179,7 +210,7 @@
   function updateStats() {
     const remaining = Math.max(words.length - index, 0);
     els.wordsLeft.textContent = remaining;
-    const secondsLeft = (remaining / wpm) * 60;
+    const secondsLeft = (remaining / effectiveWpm()) * 60;
     const m = Math.floor(secondsLeft / 60);
     const s = Math.round(secondsLeft % 60);
     els.timeLeft.textContent = m + ':' + String(s).padStart(2, '0');
@@ -200,7 +231,7 @@
   }
 
   function msPerWord(word) {
-    let base = 60000 / wpm;
+    let base = 60000 / effectiveWpm();
     if (word.length > 7) base *= 1.15;
     if (/[,;:]$/.test(word)) base *= 1.4;
     if (/[.!?]$/.test(word)) base *= 1.9;
@@ -216,12 +247,16 @@
     renderWord(words[index]);
     updateStats();
     const delay = msPerWord(words[index]);
+    shownLog.push({ index, at: Date.now() });
+    if (shownLog.length > 40) shownLog.shift();
+    trackFocusedReading(delay);
     index++;
     timer = setTimeout(tick, delay);
   }
 
   function play() {
     if (!words.length) return;
+    pausedByAttention = false;
     if (index >= words.length) index = 0;
     if (index === 0) {
       beginWithCountdown();
@@ -246,6 +281,7 @@
 
   function pause() {
     playing = false;
+    pausedByAttention = false;
     els.play.disabled = false;
     els.play.textContent = 'Start';
     if (timer) clearTimeout(timer);
@@ -260,6 +296,7 @@
 
   function closeOverlay() {
     pause();
+    if (eyeTracking) stopAttention();
     if (keyHandler) {
       document.removeEventListener('keydown', keyHandler, true);
       keyHandler = null;
@@ -300,11 +337,12 @@
             <button class="sr-btn sr-btn-primary" id="srPlay">Start</button>
             <button class="sr-btn sr-btn-secondary" id="srRestart">Restart</button>
             <span class="sr-stats"><span id="srWordsLeft">0</span> words left · <span id="srTimeLeft">0:00</span></span>
+            <button class="sr-btn sr-btn-secondary sr-attn" id="srAttn" aria-pressed="false" data-state="off" title="Pause when you look away and tune speed to your focus. Uses the webcam on-device."><span class="sr-dot"></span>Attention</button>
           </div>
           <div class="sr-row">
             <label for="srWpm">Speed</label>
             <input type="range" id="srWpm" min="150" max="900" step="25" value="350">
-            <span class="sr-wpm-value"><span id="srWpmValue">350</span> wpm</span>
+            <span class="sr-wpm-value"><span id="srWpmValue">350</span> wpm <span class="sr-wpm-adjust" id="srWpmAdjust"></span></span>
           </div>
         </div>
         <p class="sr-hint">Space play/pause · ← → speed · Esc close</p>
@@ -323,11 +361,14 @@
       timeLeft: shadowRoot.getElementById('srTimeLeft'),
       wpmSlider: shadowRoot.getElementById('srWpm'),
       wpmValue: shadowRoot.getElementById('srWpmValue'),
+      wpmAdjust: shadowRoot.getElementById('srWpmAdjust'),
+      attn: shadowRoot.getElementById('srAttn'),
       close: shadowRoot.querySelector('.sr-close')
     };
 
     els.play.addEventListener('click', () => (playing ? pause() : play()));
     els.restart.addEventListener('click', restart);
+    els.attn.addEventListener('click', () => setEyeTracking(!eyeTracking));
     els.close.addEventListener('click', closeOverlay);
     backdrop.addEventListener('click', (e) => {
       if (e.target === backdrop) closeOverlay();
@@ -336,7 +377,7 @@
     els.wpmSlider.addEventListener('input', () => {
       wpm = parseInt(els.wpmSlider.value, 10);
       els.wpmValue.textContent = wpm;
-      updateStats();
+      setWpmAdjust(0);
       chrome.storage.sync.set({ wpm });
     });
 
@@ -348,13 +389,13 @@
         wpm = Math.min(900, wpm + 25);
         els.wpmSlider.value = wpm;
         els.wpmValue.textContent = wpm;
-        updateStats();
+        setWpmAdjust(0);
         chrome.storage.sync.set({ wpm });
       } else if (e.code === 'ArrowLeft') {
         wpm = Math.max(150, wpm - 25);
         els.wpmSlider.value = wpm;
         els.wpmValue.textContent = wpm;
-        updateStats();
+        setWpmAdjust(0);
         chrome.storage.sync.set({ wpm });
       } else if (e.code === 'Escape') {
         closeOverlay();
@@ -407,15 +448,102 @@
     });
   }
 
+  function effectiveWpm() {
+    return Math.max(wpm + wpmAdjust, 50);
+  }
+
+  function setWpmAdjust(value) {
+    wpmAdjust = Math.min(Math.max(value, WPM_ADJUST_MIN), WPM_ADJUST_MAX);
+    focusedPlayMs = 0;
+    const sign = wpmAdjust > 0 ? '+' : '−';
+    els.wpmAdjust.textContent = wpmAdjust === 0 ? '' : `(${sign}${Math.abs(wpmAdjust)} adaptive)`;
+    updateStats();
+  }
+
+  function trackFocusedReading(delay) {
+    if (!eyeTracking || attentionState !== 'focused') return;
+    focusedPlayMs += delay;
+    if (focusedPlayMs >= FOCUS_SPEEDUP_MS) setWpmAdjust(wpmAdjust + WPM_ADJUST_STEP);
+  }
+
+  function setAttentionState(state) {
+    attentionState = state;
+    if (els.attn) els.attn.dataset.state = state;
+  }
+
+  function setEyeTracking(enabled) {
+    eyeTracking = enabled;
+    chrome.storage.sync.set({ eyeTracking });
+    els.attn.setAttribute('aria-pressed', String(enabled));
+    enabled ? startAttention() : stopAttention();
+  }
+
+  function startAttention() {
+    setAttentionState('starting');
+    chrome.runtime.sendMessage({ type: 'eye:start' }).catch((err) => {
+      console.error('Speed Reader: could not start attention tracking', err);
+      setAttentionState('error');
+    });
+  }
+
+  function stopAttention() {
+    setAttentionState('off');
+    if (pausedByAttention) pausedByAttention = false;
+    setWpmAdjust(0);
+    chrome.runtime.sendMessage({ type: 'eye:stop' }).catch((err) => {
+      console.error('Speed Reader: could not stop attention tracking', err);
+    });
+  }
+
+  // `since` is when the lapse actually began, before debouncing confirmed it,
+  // so rewind to the word that was showing then rather than the current one.
+  function handleAttentionLapse(since) {
+    const lapsedAt = since - REWIND_BEFORE_LAPSE_MS;
+    const missed = shownLog.find((entry) => entry.at >= lapsedAt);
+    pause();
+    pausedByAttention = true;
+    if (missed) {
+      index = missed.index;
+      renderWord(words[index]);
+    }
+    setWpmAdjust(wpmAdjust - WPM_ADJUST_STEP);
+  }
+
+  function handleAttentionMessage(msg) {
+    if (!eyeTracking || !shadowHost) return;
+    if (msg.type === 'eye:status') {
+      setAttentionState(msg.status === 'ready' ? 'focused' : msg.status);
+    } else if (msg.type === 'eye:state') {
+      const wasLapsed = ATTENTION_PAUSE_STATES.includes(attentionState);
+      setAttentionState(msg.state);
+      if (ATTENTION_PAUSE_STATES.includes(msg.state) && playing) {
+        handleAttentionLapse(msg.since);
+      } else if (msg.state === 'focused' && wasLapsed && pausedByAttention) {
+        play();
+      }
+    } else if (msg.type === 'eye:stats') {
+      const now = Date.now();
+      const fatigued = msg.sampleMs >= FATIGUE_MIN_SAMPLE_MS && msg.blinksPerMin > FATIGUE_BLINKS_PER_MIN;
+      if (fatigued && playing && now - lastFatigueSlowdown > FATIGUE_COOLDOWN_MS) {
+        lastFatigueSlowdown = now;
+        setWpmAdjust(wpmAdjust - WPM_ADJUST_STEP);
+      }
+    }
+  }
+
   function startReading(mode, autoplay) {
-    chrome.storage.sync.get({ wpm: 350 }, (data) => {
+    chrome.storage.sync.get({ wpm: 350, eyeTracking: false }, (data) => {
       wpm = data.wpm || 350;
       const text = getSourceText(mode);
       words = text.trim().split(/\s+/)
         .flatMap((w) => w.split(/(?<=[–—]|--)(?=\S)/))
         .filter(Boolean);
 
-      if (!shadowHost) buildOverlay();
+      const freshOverlay = !shadowHost;
+      if (freshOverlay) buildOverlay();
+      shownLog = [];
+      setWpmAdjust(0);
+      if (freshOverlay && data.eyeTracking) setEyeTracking(true);
       els.wpmSlider.value = wpm;
       els.wpmValue.textContent = wpm;
       index = 0;
@@ -431,6 +559,8 @@
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg && msg.action === 'start') {
       startReading(msg.mode || 'page');
+    } else if (msg?.type?.startsWith('eye:')) {
+      handleAttentionMessage(msg);
     }
   });
 
