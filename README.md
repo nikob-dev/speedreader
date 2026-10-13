@@ -27,3 +27,42 @@ npm test      # unit tests + headless-Chrome smoke tests
 - CI (`.github/workflows/ci.yml`) runs both on every PR and on every push to `main`, then builds and checks the store zip.
 
 Keep DOM-free logic in `reader-core.js` so it stays unit-testable. `content.js` reads it via `globalThis.SRCore`, and every script injection must list `reader-core.js` before `content.js`.
+
+## Releasing (CI/CD)
+
+```
+PR ──────────────► ci.yml       unit + smoke tests, zip check (required to merge)
+merge to main ───► beta.yml     tests → publish to the private Beta listing as <last tag>.<run#>
+git tag vX.Y.Z ──► release.yml  tests → publish to the Public listing as X.Y.Z + GitHub Release
+```
+
+Every upload goes through Google's review (hours to days). After approval, Chrome auto-updates installed copies within a few hours. Manifest V3 forbids remotely hosted code, so there is no way to skip this.
+
+**Version numbers are set by CI, so don't edit `version` in `manifest.json` by hand.** Public releases use the tag (`v1.5.0` → `1.5.0`). Beta builds use the last tag plus the run number (`1.5.0.42`, shown as `1.5.0-beta.42`).
+
+**Cut a public release** (from an up-to-date `main`):
+
+```sh
+git switch main && git pull
+git tag v1.5.0 && git push origin v1.5.0
+```
+
+**Testers** join by being added to the beta Google Group, then installing from the Beta listing link. They receive each approved beta automatically.
+
+### One-time setup
+
+1. Register a [Chrome Web Store developer account](https://chrome.google.com/webstore/devconsole) ($5, needs 2-step verification). Note your **publisher ID** (shown in the dashboard's account settings).
+2. Run `npm run zip` and upload the zip by hand twice, once for each listing. The API can't create new items. Fill each listing from [`store/listing.md`](store/listing.md):
+   - **Speed Reader — RSVP**: Public.
+   - **Speed Reader — RSVP (Beta)**: Private, with your testers Google Group as trusted testers.
+3. Create OAuth credentials (client ID, client secret, refresh token) by following the [chrome-webstore-upload-keys guide](https://github.com/fregante/chrome-webstore-upload-keys).
+4. Add the repo secrets (Settings → Secrets and variables → Actions):
+   - `CWS_CLIENT_ID`
+   - `CWS_CLIENT_SECRET`
+   - `CWS_REFRESH_TOKEN`
+   - `CWS_PUBLISHER_ID`
+   - `CWS_BETA_ITEM_ID`
+   - `CWS_PUBLIC_ITEM_ID`
+5. Require the `test` status check on `main` (Settings → Branches).
+
+Until the secrets exist, `beta.yml` and `release.yml` run in **dry-run** mode: they test, stamp the version and build the zip, but skip the upload.
