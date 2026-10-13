@@ -13,7 +13,7 @@ async function injectIntoOpenTabs() {
   const tabs = await chrome.tabs.query({ url: ['http://*/*', 'https://*/*', 'file:///*'] });
   const results = await Promise.allSettled(
     tabs.map((tab) =>
-      chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] })
+      chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['reader-core.js', 'content.js'] })
     )
   );
   results.forEach((result, i) => {
@@ -28,7 +28,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   try {
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      files: ['content.js']
+      files: ['reader-core.js', 'content.js']
     });
     chrome.tabs.sendMessage(tab.id, { action: 'start', mode: 'selection' });
   } catch (e) {

@@ -2,6 +2,13 @@
   if (window.__srLoaded) return;
   window.__srLoaded = true;
 
+  // Read through globalThis on each call so a hot-reloaded reader-core.js takes effect.
+  const tokenize = (text) => globalThis.SRCore.tokenize(text);
+  const orpIndex = (word) => globalThis.SRCore.orpIndex(word);
+  const escapeHtml = (s) => globalThis.SRCore.escapeHtml(s);
+  const msPerWord = (word) => globalThis.SRCore.msPerWord(word, wpm);
+  const skipTarget = (...args) => globalThis.SRCore.skipTarget(...args);
+
   const OVERLAY_CSS = `
     :host { all: initial; }
     .sr-backdrop {
@@ -221,15 +228,6 @@
     return extractPageText();
   }
 
-  function orpIndex(word) {
-    const len = word.length;
-    if (len <= 1) return 0;
-    if (len <= 5) return 1;
-    if (len <= 9) return 2;
-    if (len <= 13) return 3;
-    return 4;
-  }
-
   function renderWord(word) {
     if (!word) {
       els.word.innerHTML = '<span class="sr-placeholder">Ready. Press Start or Space.</span>';
@@ -243,10 +241,6 @@
       '<span class="before">' + escapeHtml(before) + '</span>' +
       '<span class="pivot">' + escapeHtml(pivotChar) + '</span>' +
       '<span class="after">' + escapeHtml(after) + '</span>';
-  }
-
-  function escapeHtml(s) {
-    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
   function updateStats() {
@@ -273,23 +267,11 @@
     updateStats();
   }
 
-  function skipTarget(direction) {
-    let i = shownIndex;
-    let elapsed = 0;
-    while (elapsed < SKIP_MS) {
-      const next = i + direction;
-      if (next < 0 || next >= words.length) break;
-      elapsed += msPerWord(words[direction < 0 ? next : i]);
-      i = next;
-    }
-    return i;
-  }
-
   // While playing, holds the target word briefly before continuing; repeated
   // presses reschedule the hold, so they stack. While paused it only previews.
   function skipByTime(direction) {
     if (!words.length || els.play.disabled) return;
-    const target = skipTarget(direction);
+    const target = skipTarget(words, shownIndex, direction, wpm, SKIP_MS);
     showSkipBadge(target - shownIndex);
     index = target;
     shownIndex = target;
@@ -321,15 +303,6 @@
     els.wpmValue.textContent = wpm;
     updateStats();
     chrome.storage.sync.set({ wpm });
-  }
-
-  function msPerWord(word) {
-    let base = 60000 / wpm;
-    if (word.length > 7) base *= 1.15;
-    if (/[,;:]$/.test(word)) base *= 1.4;
-    if (/[.!?]$/.test(word)) base *= 1.9;
-    if (/(?:[–—]|--)$/.test(word) || word === '-') base *= 1.7;
-    return base;
   }
 
   function tick() {
@@ -632,9 +605,7 @@
     chrome.storage.sync.get({ wpm: 350, readerSize: 'm', readerCustom: null }, (data) => {
       wpm = data.wpm || 350;
       const text = getSourceText(mode);
-      words = text.trim().split(/\s+/)
-        .flatMap((w) => w.split(/(?<=[–—]|--)(?=\S)/))
-        .filter(Boolean);
+      words = tokenize(text);
 
       if (!shadowHost) buildOverlay();
       const savedSize = data.readerSize;
