@@ -1,0 +1,63 @@
+name: beta
+
+# Every push to main: test, then publish to the private Beta listing (trusted testers).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: cws-beta
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    needs: ci
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # tags are needed to find the last release
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Beta builds extend the last public release: v1.5.0 -> 1.5.0.<run>.
+      # run_number only grows, so every upload is higher than the one before.
+      - name: Stamp beta version
+        run: |
+          if tag=$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null); then
+            base=${tag#v}
+          else
+            base=$(node -p "require('./speed-reader-extension/manifest.json').version")
+          fi
+          node scripts/stamp-version.mjs "$base.$GITHUB_RUN_NUMBER" "$base-beta.$GITHUB_RUN_NUMBER"
+
+      - run: npm run zip
+
+      - name: Upload and publish to Beta listing
+        env:
+          CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+          PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID }}
+          EXTENSION_ID: ${{ secrets.CWS_BETA_ITEM_ID }}
+        run: |
+          if [ -z "$CLIENT_ID" ] || [ -z "$EXTENSION_ID" ]; then
+            echo "::notice::DRY RUN — no CWS secrets; built $(ls dist/*.zip) but did not upload."
+            exit 0
+          fi
+          npx chrome-webstore-upload --source dist/*.zip
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: beta-zip
+          path: dist/*.zip
+          if-no-files-found: error
