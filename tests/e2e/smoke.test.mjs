@@ -241,3 +241,30 @@ test('the shortcut reads only the selection on a web page', async () => {
   assert.equal((await readerState(page)).wordsLeft, selectedWords);
   await page.close();
 });
+
+test('the popup greys out Speed Read Selection on a PDF and explains why', async () => {
+  const pdfPage = await openPdf();
+  const worker = await serviceWorker();
+  const tabId = await worker.evaluate(async (url) => (await chrome.tabs.query({ url }))[0].id, pdfUrl);
+  const popup = await browser.newPage();
+  await popup.goto(`chrome-extension://${extensionId}/popup.html?tab=${tabId}`);
+  await popup.waitForSelector('#pdfHint:not([hidden])', { timeout: 3000 });
+  assert.equal(await popup.$eval('#readSelection', (b) => b.disabled), true);
+  assert.equal(await popup.$eval('#readPage', (b) => b.disabled), false);
+  await popup.close();
+  await pdfPage.close();
+});
+
+test('the popup keeps Speed Read Selection enabled on a web page', async () => {
+  const page = await openFixture();
+  const worker = await serviceWorker();
+  const tabId = await worker.evaluate(async (url) => (await chrome.tabs.query({ url }))[0].id, fixtureUrl);
+  const popup = await browser.newPage();
+  await popup.goto(`chrome-extension://${extensionId}/popup.html?tab=${tabId}`);
+  // flagPdfTab runs asynchronously; give it time to (wrongly) disable the button.
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  assert.equal(await popup.$eval('#readSelection', (b) => b.disabled), false);
+  assert.equal(await popup.$eval('#pdfHint', (p) => p.hidden), true);
+  await popup.close();
+  await page.close();
+});

@@ -88,7 +88,15 @@
     .sr-word .before { text-align: right; min-width: calc(var(--sr-word-size) * 3.6); color: #ece9e2; }
     .sr-word .pivot { color: #ff5d3a; text-align: center; padding: 0 1px; }
     .sr-word .after { text-align: left; min-width: calc(var(--sr-word-size) * 3.6); color: #ece9e2; }
-    .sr-placeholder { font-family: inherit; font-size: 15px; color: #7d8095; }
+    .sr-placeholder {
+      flex: 1;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      font-size: 15px;
+      line-height: 1.5;
+      text-align: center;
+      padding: 0 24px;
+      color: #7d8095;
+    }
     .sr-skip-badge {
       position: absolute;
       top: 14px;
@@ -132,6 +140,7 @@
     .sr-btn-primary { background: #ece9e2; color: #14151c; }
     .sr-btn-secondary { background: transparent; color: #ece9e2; border: 1px solid #2a2d3b; }
     .sr-btn:hover { opacity: 0.85; }
+    .sr-btn:disabled { opacity: 0.4; cursor: default; }
     .sr-stats { font-size: 12px; color: #7d8095; }
     .sr-row label { font-size: 12px; color: #7d8095; white-space: nowrap; }
     .sr-row input[type="range"] { flex: 1; accent-color: #ff5d3a; }
