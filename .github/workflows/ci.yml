@@ -1,6 +1,6 @@
 name: ci
 
-# beta.yml and release.yml call this before publishing, so main and tags are tested too.
+# publish.yml calls this before publishing, so main is tested too.
 on:
   pull_request:
   workflow_call:
