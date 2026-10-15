@@ -23,6 +23,7 @@ Read faster without moving your eyes. Speed Reader shows text one word at a time
 - ← → skip back or forward about 2 seconds; Space to pause; Esc to close
 - Click or drag the progress bar to jump anywhere
 - Resizable reader: S / M / L / full window
+- Works on PDFs opened in Chrome: read the whole PDF or right-click a selection
 - No account, no tracking, nothing leaves your browser
 
 **Graphic assets:**
@@ -41,8 +42,9 @@ Display selected text or a page's main article one word at a time (RSVP) so the 
 |---|---|
 | `scripting` | Injects the reader overlay into the current tab when the user clicks the toolbar button or context-menu item, and into already-open tabs right after install so the shortcut works without reloading them. |
 | `contextMenus` | Adds a "Speed Read Selection" item to the right-click menu when text is selected. |
+| `offscreen` | Runs the bundled PDF.js library in a hidden extension page to extract text from a PDF the user asked to read. Chrome's PDF viewer doesn't expose its text to extensions. The document closes when extraction finishes. |
 | `storage` | Saves the user's reading speed and reader size preferences (`chrome.storage.sync`). |
-| Host permission `<all_urls>` | The double-Shift shortcut must be available on any page the user reads. That requires a content script on all sites, because `activeTab` only grants access after an explicit click. The script only listens for the shortcut and reads text the user selected or asked to read; it sends nothing anywhere. |
+| Host permission `<all_urls>` | The double-Shift shortcut must be available on any page the user reads. That requires a content script on all sites, because `activeTab` only grants access after an explicit click. The script only listens for the shortcut and reads text the user selected or asked to read; it sends nothing anywhere. The same access lets the extension download a PDF the user asked to read, so its text can be extracted locally. |
 
 **Remote code:** No, I am not using remote code.
 
