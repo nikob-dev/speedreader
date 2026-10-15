@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Speed Reader — RSVP",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Speed read any page or selection one word at a time. Highlight text, double-tap Shift, and read at up to 900 words per minute.",
   "icons": {
     "16": "icons/icon16.png",
@@ -19,7 +19,7 @@
   "background": {
     "service_worker": "background.js"
   },
-  "permissions": ["scripting", "contextMenus", "storage"],
+  "permissions": ["scripting", "contextMenus", "storage", "offscreen"],
   "host_permissions": ["<all_urls>"],
   "content_scripts": [
     {

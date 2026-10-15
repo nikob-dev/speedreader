@@ -19,14 +19,19 @@ npm test      # unit tests + headless-Chrome smoke tests
 
 ## Testing
 
-- `npm run test:unit`: pure reading logic in `speed-reader-extension/reader-core.js` (tokenizing, pivot letter, word timing, skip math), using Node's built-in `node:test`.
+- `npm run test:unit`: pure reading logic in `speed-reader-extension/reader-core.js` (tokenizing, pivot letter, word timing, skip math) and PDF text joining in `pdf-text.js`, using Node's built-in `node:test`.
 - `npm run test:e2e`: Puppeteer loads the unpacked extension in headless Chrome against `tests/fixtures/article.html` and checks that:
   - double-Shift opens the reader;
   - double-Shift still works in an open tab after the extension reloads;
-  - page mode loads the article text.
+  - page mode loads the article text;
+  - on a PDF (built in memory by `tests/fixtures/make-pdf.mjs`), page mode extracts its text, menu selections are read, and reader keys work after focus was in the PDF viewer.
 - CI (`.github/workflows/ci.yml`) runs both on every PR and on every push to `main`, then builds and checks the store zip.
 
 Keep DOM-free logic in `reader-core.js` so it stays unit-testable. `content.js` reads it via `globalThis.SRCore`, and every script injection must list `reader-core.js` before `content.js`.
+
+## PDF support
+
+Chrome's PDF viewer is a sealed frame, so `content.js` asks `background.js` for the text. The background opens `offscreen.html`, which fetches the PDF and parses it with a vendored copy of PDF.js (`speed-reader-extension/vendor/pdfjs/`). To upgrade PDF.js, bump `PDFJS_VERSION` in `scripts/vendor-pdfjs.mjs`, run `node scripts/vendor-pdfjs.mjs`, and commit the result.
 
 ## Releasing (CI/CD)
 
