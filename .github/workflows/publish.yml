@@ -1,0 +1,74 @@
+name: publish
+
+# Every push to main: test, then publish to the Public listing and tag the release.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: cws-public
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    needs: ci
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # create the tag and GitHub Release
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # major.minor comes from the committed manifest; the patch is the run number.
+      # run_number only grows, so every upload is higher than the one before.
+      # Start a new minor by committing manifest version 1.5.0 -> ships 1.5.<run>.
+      - name: Stamp version
+        id: version
+        run: |
+          major_minor=$(node -p "require('./speed-reader-extension/manifest.json').version.split('.').slice(0, 2).join('.')")
+          version="$major_minor.$GITHUB_RUN_NUMBER"
+          node scripts/stamp-version.mjs "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - run: npm run zip
+
+      - name: Upload and publish to Public listing
+        id: upload
+        env:
+          CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+          PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID }}
+          EXTENSION_ID: ${{ secrets.CWS_PUBLIC_ITEM_ID }}
+        run: |
+          if [ -z "$CLIENT_ID" ] || [ -z "$EXTENSION_ID" ]; then
+            echo "::notice::DRY RUN — no CWS secrets; built $(ls dist/*.zip) but did not upload, tag or release."
+            echo "published=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          npx chrome-webstore-upload --source dist/*.zip
+          echo "published=true" >> "$GITHUB_OUTPUT"
+
+      # Tags record what shipped; they are created after upload and never trigger a publish.
+      - name: Create GitHub Release
+        if: steps.upload.outputs.published == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: gh release create "v$VERSION" dist/*.zip --target "$GITHUB_SHA" --title "v$VERSION" --generate-notes
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: public-zip
+          path: dist/*.zip
+          if-no-files-found: error
