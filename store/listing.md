@@ -1,6 +1,6 @@
 # Chrome Web Store listing — copy/paste source
 
-Paste these into the developer dashboard when creating each item. Use the same text for the Beta item, but set its name to `Speed Reader — RSVP (Beta)`.
+Paste these into the developer dashboard when creating the item.
 
 ## Store listing tab
 
@@ -50,5 +50,4 @@ Display selected text or a page's main article one word at a time (RSVP) so the 
 
 ## Distribution tab
 
-- Public item: Visibility **Public**, all regions.
-- Beta item: Visibility **Private** → trusted testers = your testers Google Group address.
+- Visibility **Public**, all regions.
