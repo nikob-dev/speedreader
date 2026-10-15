@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        files: ['content.js']
+        files: ['reader-core.js', 'content.js']
       });
       chrome.tabs.sendMessage(tab.id, { action: 'start', mode });
       window.close();
