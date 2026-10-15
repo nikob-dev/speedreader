@@ -225,12 +225,18 @@
   // document, so PDFs are parsed by the extension and selections come from the menu.
   const isPdfDocument = () => document.contentType === 'application/pdf';
 
+  const NO_PDF_SELECTION = Symbol('no PDF selection');
+
   // Resolves to null when the page itself must be extracted asynchronously (a PDF).
+  // 'selection' (popup, context menu) and 'shortcut' (keyboard command) both prefer the
+  // selection; only 'shortcut' may fall back to a whole PDF, since the popup can't see a
+  // PDF selection and reading from page 1 instead would ignore what the user highlighted.
   function getSourceText(mode, providedText) {
-    if (mode === 'selection') {
+    if (mode === 'selection' || mode === 'shortcut') {
       const sel = window.getSelection().toString();
       if (sel && sel.trim().length) return sel;
       if (providedText && providedText.trim().length) return providedText;
+      if (mode === 'selection' && isPdfDocument()) return NO_PDF_SELECTION;
     }
     return isPdfDocument() ? null : extractPageText();
   }
@@ -628,7 +634,7 @@
     chrome.storage.sync.get({ wpm: 350, readerSize: 'm', readerCustom: null }, async (data) => {
       wpm = data.wpm || 350;
       const text = getSourceText(mode, providedText);
-      words = text === null ? [] : tokenize(text);
+      words = typeof text === 'string' ? tokenize(text) : [];
 
       if (!shadowHost) buildOverlay();
       els.backdrop.focus({ preventScroll: true });
@@ -644,6 +650,14 @@
       els.play.textContent = 'Start';
       renderWord(null);
       updateStats();
+
+      if (text === NO_PDF_SELECTION) {
+        els.play.disabled = true;
+        showMessage(
+          "Chrome's PDF viewer hides selections from the toolbar. Right-click the highlighted text → Speed Read Selection, or press Alt+Shift+R (⌥⇧R on Mac) to read the whole PDF."
+        );
+        return;
+      }
 
       if (text === null) {
         els.play.disabled = true;
@@ -674,7 +688,7 @@
 
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg && msg.action === 'start') {
-      startReading(msg.mode || 'page', false, msg.text);
+      startReading(msg.mode || 'page', Boolean(msg.autoplay), msg.text);
     }
   });
 
