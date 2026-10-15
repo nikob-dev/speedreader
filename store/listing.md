@@ -11,6 +11,8 @@ Speed read any page or selection one word at a time. Highlight text, double-tap 
 
 **Category:** Productivity → Tools
 
+**Language:** English
+
 **Description:**
 
 Read faster without moving your eyes. Speed Reader shows text one word at a time at a fixed focal point (rapid serial visual presentation, or RSVP), with the pivot letter highlighted so your eye always lands in the same place.
@@ -23,10 +25,10 @@ Read faster without moving your eyes. Speed Reader shows text one word at a time
 - Resizable reader: S / M / L / full window
 - No account, no tracking, nothing leaves your browser
 
-**Assets needed (create before submitting):**
-- [ ] Icon 128×128 (have: `speed-reader-extension/icons/icon128.png`)
-- [ ] At least 1 screenshot, 1280×800 (reader open over an article)
-- [ ] Small promo tile, 440×280
+**Graphic assets:**
+- [x] Store icon 128×128: upload `speed-reader-extension/icons/icon128.png` (the dashboard doesn't read it from the zip)
+- [x] Screenshot 1280×800: `store/screenshots/reader-1280x800.png` (regenerate with `npm run screenshots`)
+- [ ] Small promo tile 440×280 (optional)
 
 ## Privacy practices tab
 
@@ -51,3 +53,7 @@ Display selected text or a page's main article one word at a time (RSVP) so the 
 ## Distribution tab
 
 - Visibility **Public**, all regions.
+
+## Account settings (once per publisher)
+
+- Enter a contact email, then click the verification link Google sends. Publishing is blocked until it's verified.
