@@ -27,3 +27,7 @@ This version asks for access to all sites, not just the current tab. That's beca
 - The shortcut only fires if there's an actual text selection — an idle double-tap does nothing.
 - Article extraction (for "Speed Read This Page") is a simple heuristic (looks for `<article>`/`<main>`, falls back to the densest block of paragraphs). Works well on most blogs, news sites, and docs, but won't be perfect on every layout.
 - Won't run on Chrome's internal pages (`chrome://...`) or the Chrome Web Store — that's a browser restriction on all extensions, not a bug.
+
+## Roadmap
+
+Planned features (themes, reading stats, streaks, resume, and more) are tracked in [ROADMAP.md](../ROADMAP.md).
