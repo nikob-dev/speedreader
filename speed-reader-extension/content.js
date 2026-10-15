@@ -654,7 +654,7 @@
       if (text === NO_PDF_SELECTION) {
         els.play.disabled = true;
         showMessage(
-          "Chrome's PDF viewer hides selections from the toolbar. Right-click the highlighted text → Speed Read Selection, or press Alt+Shift+R (⌥⇧R on Mac) to read the whole PDF."
+          "Chrome's PDF viewer hides selections from the toolbar. Right-click the highlighted text → Speed Read Selection, or press Alt+Shift+S (⌥⇧S on Mac) to read the whole PDF."
         );
         return;
       }

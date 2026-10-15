@@ -23,7 +23,7 @@
   "host_permissions": ["<all_urls>"],
   "commands": {
     "speed-read": {
-      "suggested_key": { "default": "Alt+Shift+R" },
+      "suggested_key": { "default": "Alt+Shift+S" },
       "description": "Speed read the selection, or the whole page or PDF"
     }
   },

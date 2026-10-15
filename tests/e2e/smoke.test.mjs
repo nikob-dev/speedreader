@@ -207,8 +207,9 @@ test('the speed-read shortcut is registered', async () => {
   const commands = await worker.evaluate(() => chrome.commands.getAll());
   const command = commands.find((c) => c.name === 'speed-read');
   assert.ok(command, 'speed-read command missing from the manifest');
-  // Chrome leaves the shortcut empty if the suggested key clashes; the label is OS-specific.
-  assert.match(command.shortcut, /^(Alt\+Shift\+R|⌥⇧R)$/);
+  // Chrome leaves the shortcut empty when the key is one of its own (Alt+Shift+R is, on
+  // Windows/Linux); the label is OS-specific.
+  assert.match(command.shortcut, /^(Alt\+Shift\+R|⌥⇧S)$/);
 });
 
 test('the shortcut reads and plays the whole PDF', async () => {
