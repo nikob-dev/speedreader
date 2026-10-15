@@ -11,6 +11,7 @@
 ## Use
 
 - **Fastest way:** highlight text on any page, then double-tap the **Shift** key. The reader opens immediately on your selection.
+- **Keyboard shortcut:** **Alt+Shift+R** (⌥⇧R on Mac) reads the selection, or the whole page if nothing is selected. Change it at `chrome://extensions/shortcuts`.
 - Or select text, right-click → **Speed Read Selection**.
 - Or click the toolbar icon → **Speed Read This Page** to read the page's main content.
 - Inside the reader: Space to play/pause, ← → to skip back/forward ~2 seconds (handy after a blink), − + (or the buttons beside the slider) to change speed by 10 wpm, Esc to close.
@@ -20,7 +21,8 @@
 ## PDFs
 
 - Toolbar icon → **Speed Read This Page** reads the whole PDF. Right-click a selection → **Speed Read Selection** reads just that part.
-- Double-Shift doesn't work inside Chrome's PDF viewer: the viewer keeps its keystrokes and selection away from extensions.
+- Double-Shift doesn't work inside Chrome's PDF viewer: the viewer keeps its keystrokes and selection away from extensions. Press **Alt+Shift+R** (⌥⇧R on Mac) to read the whole PDF instead.
+- The toolbar's **Speed Read Selection** can't see a PDF selection either, so on a PDF it points you to the right-click menu.
 - Local PDFs (`file://`) need **Allow access to file URLs** turned on for Speed Reader in `chrome://extensions`.
 - Scanned PDFs with no text layer can't be read (there's no OCR).
 

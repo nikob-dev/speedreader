@@ -23,18 +23,26 @@ async function injectIntoOpenTabs() {
   });
 }
 
-chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId !== 'sr-speed-read-selection' || !tab || !tab.id) return;
+async function startInTab(tabId, message) {
   try {
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ['reader-core.js', 'content.js']
-    });
-    // Chrome's PDF viewer hides its selection from the page, but the menu still reports it.
-    chrome.tabs.sendMessage(tab.id, { action: 'start', mode: 'selection', text: info.selectionText });
+    await chrome.scripting.executeScript({ target: { tabId }, files: ['reader-core.js', 'content.js'] });
+    await chrome.tabs.sendMessage(tabId, message);
   } catch (e) {
     console.error('Speed Reader could not run on this page:', e);
   }
+}
+
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId !== 'sr-speed-read-selection' || !tab || !tab.id) return;
+  // Chrome's PDF viewer hides its selection from the page, but the menu still reports it.
+  startInTab(tab.id, { action: 'start', mode: 'selection', text: info.selectionText });
+});
+
+// Chrome handles command shortcuts above the page, so this one also fires inside the
+// PDF viewer, where double-Shift never reaches the content script.
+chrome.commands.onCommand.addListener((command, tab) => {
+  if (command !== 'speed-read' || !tab || !tab.id) return;
+  startInTab(tab.id, { action: 'start', mode: 'shortcut', autoplay: true });
 });
 
 const OFFSCREEN_URL = 'offscreen.html';
