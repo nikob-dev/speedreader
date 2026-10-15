@@ -175,3 +175,97 @@ test('reader keys work after focus was inside the PDF viewer', async () => {
   await closeReader(page);
   await page.close();
 });
+
+async function readerState(page) {
+  return page.evaluate((sel) => {
+    const root = document.querySelector(sel).shadowRoot;
+    return {
+      wordsLeft: Number(root.getElementById('srWordsLeft').textContent),
+      playLabel: root.getElementById('srPlay').textContent,
+      playDisabled: root.getElementById('srPlay').disabled,
+      text: root.textContent
+    };
+  }, READER_SELECTOR);
+}
+
+test('the popup selection button on a PDF explains itself instead of reading the whole PDF', async () => {
+  const page = await openPdf();
+  // The popup sends no text: it can't see a selection inside Chrome's PDF viewer.
+  await startInTab(pdfUrl, { action: 'start', mode: 'selection' });
+  await page.waitForSelector(READER_SELECTOR, { timeout: 3000 });
+  // Give a wrongly started PDF extraction time to land before asserting it never did.
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  const state = await readerState(page);
+  assert.equal(state.wordsLeft, 0);
+  assert.equal(state.playDisabled, true);
+  assert.match(state.text, /Right-click the highlighted text/);
+  await page.close();
+});
+
+test('the speed-read shortcut is registered', async () => {
+  const worker = await serviceWorker();
+  const commands = await worker.evaluate(() => chrome.commands.getAll());
+  const command = commands.find((c) => c.name === 'speed-read');
+  assert.ok(command, 'speed-read command missing from the manifest');
+  // Chrome leaves the shortcut empty when the key is one of its own (Alt+Shift+R is, on
+  // Windows/Linux); the label is OS-specific.
+  assert.match(command.shortcut, /^(Alt\+Shift\+S|⌥⇧S)$/);
+});
+
+test('the shortcut reads and plays the whole PDF', async () => {
+  const page = await openPdf();
+  await startInTab(pdfUrl, { action: 'start', mode: 'shortcut', autoplay: true });
+  await page.waitForSelector(READER_SELECTOR, { timeout: 3000 });
+  await page.waitForFunction(
+    (sel) => document.querySelector(sel)?.shadowRoot.getElementById('srPlay').textContent === 'Pause',
+    { timeout: 10000 },
+    READER_SELECTOR
+  );
+  const state = await readerState(page);
+  assert.ok(state.wordsLeft > 0 && state.wordsLeft <= PDF_WORD_COUNT, `got ${state.wordsLeft} words left`);
+  await page.close();
+});
+
+test('the shortcut reads only the selection on a web page', async () => {
+  const page = await openFixture();
+  await page.bringToFront();
+  const selectedWords = await page.evaluate(() => {
+    const range = document.createRange();
+    range.selectNodeContents(document.getElementById('first'));
+    getSelection().removeAllRanges();
+    getSelection().addRange(range);
+    return getSelection().toString().trim().split(/\s+/).length;
+  });
+  await startInTab(fixtureUrl, { action: 'start', mode: 'shortcut' });
+  await page.waitForSelector(READER_SELECTOR, { timeout: 3000 });
+  assert.equal((await readerState(page)).wordsLeft, selectedWords);
+  await page.close();
+});
+
+const isShown = (handle) => handle.evaluate((el) => el.checkVisibility());
+
+test('the popup hides Speed Read Selection on a PDF', async () => {
+  const pdfPage = await openPdf();
+  const worker = await serviceWorker();
+  const tabId = await worker.evaluate(async (url) => (await chrome.tabs.query({ url }))[0].id, pdfUrl);
+  const popup = await browser.newPage();
+  await popup.goto(`chrome-extension://${extensionId}/popup.html?tab=${tabId}`);
+  await popup.waitForSelector('#readSelection', { hidden: true, timeout: 3000 });
+  assert.equal(await isShown(await popup.$('#readSelection')), false);
+  assert.equal(await isShown(await popup.$('#readPage')), true);
+  await popup.close();
+  await pdfPage.close();
+});
+
+test('the popup keeps Speed Read Selection on a web page', async () => {
+  const page = await openFixture();
+  const worker = await serviceWorker();
+  const tabId = await worker.evaluate(async (url) => (await chrome.tabs.query({ url }))[0].id, fixtureUrl);
+  const popup = await browser.newPage();
+  await popup.goto(`chrome-extension://${extensionId}/popup.html?tab=${tabId}`);
+  // flagPdfTab runs asynchronously; give it time to (wrongly) hide the button.
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  assert.equal(await isShown(await popup.$('#readSelection')), true);
+  await popup.close();
+  await page.close();
+});

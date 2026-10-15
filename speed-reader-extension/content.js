@@ -88,7 +88,15 @@
     .sr-word .before { text-align: right; min-width: calc(var(--sr-word-size) * 3.6); color: #ece9e2; }
     .sr-word .pivot { color: #ff5d3a; text-align: center; padding: 0 1px; }
     .sr-word .after { text-align: left; min-width: calc(var(--sr-word-size) * 3.6); color: #ece9e2; }
-    .sr-placeholder { font-family: inherit; font-size: 15px; color: #7d8095; }
+    .sr-placeholder {
+      flex: 1;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      font-size: 15px;
+      line-height: 1.5;
+      text-align: center;
+      padding: 0 24px;
+      color: #7d8095;
+    }
     .sr-skip-badge {
       position: absolute;
       top: 14px;
@@ -132,6 +140,7 @@
     .sr-btn-primary { background: #ece9e2; color: #14151c; }
     .sr-btn-secondary { background: transparent; color: #ece9e2; border: 1px solid #2a2d3b; }
     .sr-btn:hover { opacity: 0.85; }
+    .sr-btn:disabled { opacity: 0.4; cursor: default; }
     .sr-stats { font-size: 12px; color: #7d8095; }
     .sr-row label { font-size: 12px; color: #7d8095; white-space: nowrap; }
     .sr-row input[type="range"] { flex: 1; accent-color: #ff5d3a; }
@@ -225,12 +234,18 @@
   // document, so PDFs are parsed by the extension and selections come from the menu.
   const isPdfDocument = () => document.contentType === 'application/pdf';
 
+  const NO_PDF_SELECTION = Symbol('no PDF selection');
+
   // Resolves to null when the page itself must be extracted asynchronously (a PDF).
+  // 'selection' (popup, context menu) and 'shortcut' (keyboard command) both prefer the
+  // selection; only 'shortcut' may fall back to a whole PDF, since the popup can't see a
+  // PDF selection and reading from page 1 instead would ignore what the user highlighted.
   function getSourceText(mode, providedText) {
-    if (mode === 'selection') {
+    if (mode === 'selection' || mode === 'shortcut') {
       const sel = window.getSelection().toString();
       if (sel && sel.trim().length) return sel;
       if (providedText && providedText.trim().length) return providedText;
+      if (mode === 'selection' && isPdfDocument()) return NO_PDF_SELECTION;
     }
     return isPdfDocument() ? null : extractPageText();
   }
@@ -628,7 +643,7 @@
     chrome.storage.sync.get({ wpm: 350, readerSize: 'm', readerCustom: null }, async (data) => {
       wpm = data.wpm || 350;
       const text = getSourceText(mode, providedText);
-      words = text === null ? [] : tokenize(text);
+      words = typeof text === 'string' ? tokenize(text) : [];
 
       if (!shadowHost) buildOverlay();
       els.backdrop.focus({ preventScroll: true });
@@ -644,6 +659,14 @@
       els.play.textContent = 'Start';
       renderWord(null);
       updateStats();
+
+      if (text === NO_PDF_SELECTION) {
+        els.play.disabled = true;
+        showMessage(
+          "Chrome's PDF viewer hides selections from the toolbar. Right-click the highlighted text → Speed Read Selection, or press Alt+Shift+S (⌥⇧S on Mac) to read the whole PDF."
+        );
+        return;
+      }
 
       if (text === null) {
         els.play.disabled = true;
@@ -674,7 +697,7 @@
 
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg && msg.action === 'start') {
-      startReading(msg.mode || 'page', false, msg.text);
+      startReading(msg.mode || 'page', Boolean(msg.autoplay), msg.text);
     }
   });
 

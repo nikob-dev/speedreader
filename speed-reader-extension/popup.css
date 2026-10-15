@@ -69,6 +69,9 @@ body {
   margin: 10px 0 0;
 }
 
+.btn[hidden] { display: none; }
+.btn:disabled { opacity: 0.4; cursor: default; }
+
 .hint {
   font-size: 11px;
   color: #565968;

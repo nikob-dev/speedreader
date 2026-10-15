@@ -24,7 +24,7 @@ npm test      # unit tests + headless-Chrome smoke tests
   - double-Shift opens the reader;
   - double-Shift still works in an open tab after the extension reloads;
   - page mode loads the article text;
-  - on a PDF (built in memory by `tests/fixtures/make-pdf.mjs`), page mode extracts its text, menu selections are read, and reader keys work after focus was in the PDF viewer.
+  - on a PDF (built in memory by `tests/fixtures/make-pdf.mjs`), page mode extracts its text, menu selections are read, the popup's selection button explains itself instead of reading the whole PDF, the Alt+Shift+S shortcut reads and plays the PDF, and reader keys work after focus was in the PDF viewer.
 - CI (`.github/workflows/ci.yml`) runs both on every PR and on every push to `main`, then builds and checks the store zip.
 
 Keep DOM-free logic in `reader-core.js` so it stays unit-testable. `content.js` reads it via `globalThis.SRCore`, and every script injection must list `reader-core.js` before `content.js`.

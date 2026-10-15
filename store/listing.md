@@ -23,6 +23,7 @@ Read faster without moving your eyes. Speed Reader shows text one word at a time
 - ← → skip back or forward about 2 seconds; Space to pause; Esc to close
 - Click or drag the progress bar to jump anywhere
 - Resizable reader: S / M / L / full window
+- Keyboard shortcut (Alt+Shift+S) reads the selection, or the whole page or PDF
 - Works on PDFs opened in Chrome: read the whole PDF or right-click a selection
 - No account, no tracking, nothing leaves your browser
 
