@@ -21,6 +21,7 @@
       justify-content: center;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
     }
+    .sr-backdrop:focus { outline: none; }
     .sr-backdrop[data-size="full"] { background: #0b0c11; }
     .sr-card {
       --sr-card-w: 680px;
@@ -220,17 +221,34 @@
     return document.body.innerText;
   }
 
-  function getSourceText(mode) {
+  // Chrome's PDF viewer is a sealed frame: its text and selection never reach this
+  // document, so PDFs are parsed by the extension and selections come from the menu.
+  const isPdfDocument = () => document.contentType === 'application/pdf';
+
+  // Resolves to null when the page itself must be extracted asynchronously (a PDF).
+  function getSourceText(mode, providedText) {
     if (mode === 'selection') {
       const sel = window.getSelection().toString();
       if (sel && sel.trim().length) return sel;
+      if (providedText && providedText.trim().length) return providedText;
     }
-    return extractPageText();
+    return isPdfDocument() ? null : extractPageText();
+  }
+
+  async function fetchPdfText() {
+    const reply = await chrome.runtime.sendMessage({ action: 'extractPdf', url: location.href });
+    if (!reply) throw new Error('no reply from the extension');
+    if (reply.error) throw new Error(reply.error);
+    return reply.text;
+  }
+
+  function showMessage(text) {
+    els.word.innerHTML = `<span class="sr-placeholder">${escapeHtml(text)}</span>`;
   }
 
   function renderWord(word) {
     if (!word) {
-      els.word.innerHTML = '<span class="sr-placeholder">Ready. Press Start or Space.</span>';
+      showMessage('Ready. Press Start or Space.');
       return;
     }
     const p = orpIndex(word);
@@ -383,6 +401,8 @@
 
     const backdrop = document.createElement('div');
     backdrop.className = 'sr-backdrop';
+    // Focusable so opening the reader can pull keyboard focus out of an embedded PDF viewer.
+    backdrop.tabIndex = -1;
     backdrop.innerHTML = `
       <div class="sr-card">
         <button class="sr-close" aria-label="Close">&times;</button>
@@ -601,13 +621,17 @@
     });
   }
 
-  function startReading(mode, autoplay) {
-    chrome.storage.sync.get({ wpm: 350, readerSize: 'm', readerCustom: null }, (data) => {
+  let readRequest = 0;
+
+  function startReading(mode, autoplay, providedText) {
+    const request = ++readRequest;
+    chrome.storage.sync.get({ wpm: 350, readerSize: 'm', readerCustom: null }, async (data) => {
       wpm = data.wpm || 350;
-      const text = getSourceText(mode);
-      words = tokenize(text);
+      const text = getSourceText(mode, providedText);
+      words = text === null ? [] : tokenize(text);
 
       if (!shadowHost) buildOverlay();
+      els.backdrop.focus({ preventScroll: true });
       const savedSize = data.readerSize;
       const validSize = SIZE_PRESETS.includes(savedSize) || (savedSize === 'custom' && data.readerCustom);
       applySize(validSize ? savedSize : 'm', data.readerCustom);
@@ -616,9 +640,33 @@
       index = 0;
       shownIndex = 0;
       playing = false;
+      els.play.disabled = false;
       els.play.textContent = 'Start';
       renderWord(null);
       updateStats();
+
+      if (text === null) {
+        els.play.disabled = true;
+        showMessage('Extracting text from PDF…');
+        let pdfText;
+        try {
+          pdfText = await fetchPdfText();
+        } catch (e) {
+          console.error('Speed Reader could not read this PDF:', e);
+          if (request === readRequest && shadowHost) showMessage(`Couldn't read this PDF: ${e.message}`);
+          return;
+        }
+        // The reader was closed or restarted while the PDF was being parsed.
+        if (request !== readRequest || !shadowHost) return;
+        words = tokenize(pdfText);
+        if (!words.length) {
+          showMessage('This PDF has no selectable text (it may be a scanned image).');
+          return;
+        }
+        els.play.disabled = false;
+        renderWord(null);
+        updateStats();
+      }
 
       if (autoplay && words.length) play();
     });
@@ -626,7 +674,7 @@
 
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg && msg.action === 'start') {
-      startReading(msg.mode || 'page');
+      startReading(msg.mode || 'page', false, msg.text);
     }
   });
 

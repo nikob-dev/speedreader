@@ -17,6 +17,13 @@
 - Resize the reader with the **Size** buttons (S / M / L / Full), press **F** to toggle full-window mode, or drag the bottom-right corner for a custom size (double-click it to reset). Your size is remembered.
 - Click or drag the green progress line to jump to any point in the text.
 
+## PDFs
+
+- Toolbar icon → **Speed Read This Page** reads the whole PDF. Right-click a selection → **Speed Read Selection** reads just that part.
+- Double-Shift doesn't work inside Chrome's PDF viewer: the viewer keeps its keystrokes and selection away from extensions.
+- Local PDFs (`file://`) need **Allow access to file URLs** turned on for Speed Reader in `chrome://extensions`.
+- Scanned PDFs with no text layer can't be read (there's no OCR).
+
 ## About the permissions
 
 This version asks for access to all sites, not just the current tab. That's because the double-Shift shortcut needs a script listening on every page all the time, which Chrome only allows with standing site access rather than the "only when you click the icon" permission the first version used. The script only acts on a Shift-Shift press or on the actions above; it's not sending data anywhere.

@@ -30,8 +30,57 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       target: { tabId: tab.id },
       files: ['reader-core.js', 'content.js']
     });
-    chrome.tabs.sendMessage(tab.id, { action: 'start', mode: 'selection' });
+    // Chrome's PDF viewer hides its selection from the page, but the menu still reports it.
+    chrome.tabs.sendMessage(tab.id, { action: 'start', mode: 'selection', text: info.selectionText });
   } catch (e) {
     console.error('Speed Reader could not run on this page:', e);
   }
+});
+
+const OFFSCREEN_URL = 'offscreen.html';
+let offscreenCreating = null;
+let pdfJobs = 0;
+
+async function ensureOffscreen() {
+  const existing = await chrome.runtime.getContexts({
+    contextTypes: ['OFFSCREEN_DOCUMENT'],
+    documentUrls: [chrome.runtime.getURL(OFFSCREEN_URL)]
+  });
+  if (existing.length) return;
+  // Two PDFs requested at once must not both try to create the single allowed document.
+  offscreenCreating ??= chrome.offscreen
+    .createDocument({
+      url: OFFSCREEN_URL,
+      reasons: ['WORKERS'],
+      justification: 'Run PDF.js in a worker to extract text from PDFs for speed reading.'
+    })
+    .finally(() => {
+      offscreenCreating = null;
+    });
+  await offscreenCreating;
+}
+
+async function extractPdf(url) {
+  if (url.startsWith('file:') && !(await chrome.extension.isAllowedFileSchemeAccess())) {
+    return { error: 'To read local PDFs, turn on "Allow access to file URLs" for Speed Reader in chrome://extensions.' };
+  }
+  pdfJobs++;
+  try {
+    await ensureOffscreen();
+    return await chrome.runtime.sendMessage({ target: 'offscreen', action: 'extractPdfText', url });
+  } finally {
+    // PDF.js holds onto a lot of memory, so drop the document once nothing is in flight.
+    if (--pdfJobs === 0) {
+      await chrome.offscreen.closeDocument().catch((e) => console.warn('Speed Reader could not close offscreen document:', e));
+    }
+  }
+}
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg?.action !== 'extractPdf' || !sender.tab) return false;
+  extractPdf(msg.url).then(sendResponse, (err) => {
+    console.error('Speed Reader PDF extraction failed:', msg.url, err);
+    sendResponse({ error: err.message || String(err) });
+  });
+  return true;
 });
