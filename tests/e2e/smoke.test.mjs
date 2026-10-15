@@ -242,29 +242,30 @@ test('the shortcut reads only the selection on a web page', async () => {
   await page.close();
 });
 
-test('the popup greys out Speed Read Selection on a PDF and explains why', async () => {
+const isShown = (handle) => handle.evaluate((el) => el.checkVisibility());
+
+test('the popup hides Speed Read Selection on a PDF', async () => {
   const pdfPage = await openPdf();
   const worker = await serviceWorker();
   const tabId = await worker.evaluate(async (url) => (await chrome.tabs.query({ url }))[0].id, pdfUrl);
   const popup = await browser.newPage();
   await popup.goto(`chrome-extension://${extensionId}/popup.html?tab=${tabId}`);
-  await popup.waitForSelector('#pdfHint:not([hidden])', { timeout: 3000 });
-  assert.equal(await popup.$eval('#readSelection', (b) => b.disabled), true);
-  assert.equal(await popup.$eval('#readPage', (b) => b.disabled), false);
+  await popup.waitForSelector('#readSelection', { hidden: true, timeout: 3000 });
+  assert.equal(await isShown(await popup.$('#readSelection')), false);
+  assert.equal(await isShown(await popup.$('#readPage')), true);
   await popup.close();
   await pdfPage.close();
 });
 
-test('the popup keeps Speed Read Selection enabled on a web page', async () => {
+test('the popup keeps Speed Read Selection on a web page', async () => {
   const page = await openFixture();
   const worker = await serviceWorker();
   const tabId = await worker.evaluate(async (url) => (await chrome.tabs.query({ url }))[0].id, fixtureUrl);
   const popup = await browser.newPage();
   await popup.goto(`chrome-extension://${extensionId}/popup.html?tab=${tabId}`);
-  // flagPdfTab runs asynchronously; give it time to (wrongly) disable the button.
+  // flagPdfTab runs asynchronously; give it time to (wrongly) hide the button.
   await new Promise((resolve) => setTimeout(resolve, 500));
-  assert.equal(await popup.$eval('#readSelection', (b) => b.disabled), false);
-  assert.equal(await popup.$eval('#pdfHint', (p) => p.hidden), true);
+  assert.equal(await isShown(await popup.$('#readSelection')), true);
   await popup.close();
   await page.close();
 });

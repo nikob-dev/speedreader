@@ -28,8 +28,8 @@ document.addEventListener('DOMContentLoaded', () => {
     return tab?.id;
   }
 
-  // The popup can't see a selection inside Chrome's PDF viewer, so say so here
-  // instead of opening a reader with nothing to read.
+  // The popup can't see a selection inside Chrome's PDF viewer, so the option is
+  // hidden there; right-clicking the selection still works.
   async function flagPdfTab() {
     const tabId = await targetTabId();
     if (!tabId) return;
@@ -39,8 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
         func: () => document.contentType
       });
       if (result === 'application/pdf') {
-        readSelection.disabled = true;
-        document.getElementById('pdfHint').hidden = false;
+        readSelection.hidden = true;
       }
     } catch (e) {
       // Restricted pages (chrome://, the Web Store) refuse scripts; launch() reports those.
